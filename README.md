@@ -1,4 +1,4 @@
-# Lost & Found Web Application
+# Findora - A Lost & Found Web Application
 
 A cloud-native Lost and Found web application with a **React frontend** and an **AWS serverless backend**.  
 Users can report lost/found items, upload images, and get matched with potential owners through an intelligent algorithm.
