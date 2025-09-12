@@ -1,0 +1,182 @@
+service: lostfound-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  stage: dev
+  environment:
+    DYNAMODB_TABLE: LostFoundItems
+    S3_BUCKET: lost-found-images-${self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:DeleteObject
+      Resource: "arn:aws:s3:::${self:provider.environment.S3_BUCKET}/*"
+
+functions:
+  # Authentication functions
+  signup:
+    handler: handlers/auth.signup
+    events:
+      - http:
+          path: auth/signup
+          method: post
+          cors: true
+
+  login:
+    handler: handlers/auth.login
+    events:
+      - http:
+          path: auth/login
+          method: post
+          cors: true
+
+  # Lost item functions
+  reportLostItem:
+    handler: handlers/items.reportLost
+    events:
+      - http:
+          path: items/lost
+          method: post
+          cors: true
+
+  getLostItems:
+    handler: handlers/items.getLostItems
+    events:
+      - http:
+          path: items/lost/{userEmail}
+          method: get
+          cors: true
+
+  # Found item functions
+  reportFoundItem:
+    handler: handlers/items.reportFound
+    events:
+      - http:
+          path: items/found
+          method: post
+          cors: true
+
+  getFoundItems:
+    handler: handlers/items.getFoundItems
+    events:
+      - http:
+          path: items/found/{userEmail}
+          method: get
+          cors: true
+
+  # Match functions
+  getMatches:
+    handler: handlers/matches.getMatches
+    events:
+      - http:
+          path: matches/{userEmail}
+          method: get
+          cors: true
+
+  verifyMatch:
+    handler: handlers/matches.verifyMatch
+    events:
+      - http:
+          path: matches/{matchId}/verify
+          method: post
+          cors: true
+
+  # Search function
+  searchItems:
+    handler: handlers/search.searchItems
+    events:
+      - http:
+          path: search
+          method: get
+          cors: true
+
+  # Image upload function
+  uploadImage:
+    handler: handlers/upload.uploadImage
+    events:
+      - http:
+          path: upload
+          method: post
+          cors: true
+
+resources:
+  Resources:
+    # DynamoDB Table
+    LostFoundItemsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: userEmail
+            AttributeType: S
+          - AttributeName: type
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UserEmailIndex
+            KeySchema:
+              - AttributeName: userEmail
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 5
+              WriteCapacityUnits: 5
+          - IndexName: TypeIndex
+            KeySchema:
+              - AttributeName: type
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 5
+              WriteCapacityUnits: 5
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+
+    # S3 Bucket
+    LostFoundImagesBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.S3_BUCKET}
+        PublicReadPolicy: false
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+              AllowedOrigins:
+                - "*"
+              MaxAge: 3000
+
+plugins:
+  - serverless-offline
