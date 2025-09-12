@@ -32,7 +32,7 @@ Users can report lost/found items, upload images, and get matched with potential
 ---
 
 ## Architecture
-- **Frontend**: React app (deployed via S3 / Netlify / Vercel)  
+- **Frontend**: React app (deployed via S3)  
 - **Backend**: AWS Lambda functions behind API Gateway  
 - **Database**: DynamoDB with indexes for fast lookups  
 - **Storage**: S3 bucket for images  
