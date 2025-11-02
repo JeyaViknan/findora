@@ -262,7 +262,7 @@ app.post('/auth/login', (req, res) => {
 });
 
 // Lost item routes
-app.post('/items/lost', upload.single('image'), (req, res) => {
+app.post('/items/lost', upload.single('image'), async (req, res) => {
   try {
     const { description, category, location, userEmail, contactInfo } = req.body;
     
@@ -334,7 +334,7 @@ app.post('/items/lost', upload.single('image'), (req, res) => {
 });
 
 // Found item routes
-app.post('/items/found', upload.single('image'), (req, res) => {
+app.post('/items/found', upload.single('image'), async (req, res) => {
   try {
     const { description, category, location, userEmail, contactInfo, foundOption, vendorInfo } = req.body;
     
