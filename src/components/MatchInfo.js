@@ -1,10 +1,31 @@
-import React from 'react';
-import { CheckCircle, AlertCircle, Info, Star, MapPin, Clock, Palette, Tag } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { CheckCircle, AlertCircle, Info, Star, MapPin, Clock, Palette, Tag, Image } from 'lucide-react';
 
-function MatchInfo({ matchInfo, score }) {
+function MatchInfo({ matchInfo, score, imageMatchScore }) {
+  // Debug logging - must be called before any early returns
+  useEffect(() => {
+    if (matchInfo) {
+      console.log('MatchInfo props:', { matchInfo, score, imageMatchScore });
+    }
+  }, [matchInfo, score, imageMatchScore]);
+
   if (!matchInfo) return null;
 
-  const { explanations, confidence, score: matchScore } = matchInfo;
+  const { explanations, confidence, score: matchScore, imageSimilarity } = matchInfo;
+  
+  // Use imageSimilarity from matchInfo if available, otherwise use imageMatchScore prop
+  // Handle both percentage (0-100) and decimal (0-1) formats
+  let imageMatch = null;
+  
+  if (imageSimilarity !== null && imageSimilarity !== undefined) {
+    // imageSimilarity from matchInfo is already a percentage (0-100)
+    imageMatch = typeof imageSimilarity === 'number' ? imageSimilarity : null;
+  } else if (imageMatchScore !== null && imageMatchScore !== undefined) {
+    // imageMatchScore is a decimal (0-1), convert to percentage
+    imageMatch = typeof imageMatchScore === 'number' 
+      ? Math.round(imageMatchScore * 100) 
+      : null;
+  }
 
   const getConfidenceColor = (confidence) => {
     switch (confidence) {
@@ -51,10 +72,37 @@ function MatchInfo({ matchInfo, score }) {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center space-x-2 text-sm text-gray-700">
-          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-          <span className="font-medium">Match Score: {matchScore || Math.round(score * 100)}%</span>
+      <div className="space-y-3">
+        {/* Match Score and Image Match Score */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center space-x-2 text-sm text-gray-700">
+            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+            <span className="font-medium">Overall Match Score: {matchScore || Math.round(score * 100)}%</span>
+          </div>
+          
+          {imageMatch !== null && imageMatch !== undefined ? (
+            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg ${
+              imageMatch >= 70 
+                ? 'bg-green-100 text-green-800' 
+                : imageMatch >= 50 
+                ? 'bg-yellow-100 text-yellow-800' 
+                : imageMatch >= 30
+                ? 'bg-orange-100 text-orange-800'
+                : 'bg-red-100 text-red-800'
+            }`}>
+              <Image className="h-4 w-4" />
+              <span className="font-semibold text-sm">
+                Image Match: {imageMatch}%
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600">
+              <Image className="h-4 w-4" />
+              <span className="font-semibold text-sm">
+                Image comparison not available
+              </span>
+            </div>
+          )}
         </div>
         
         <div className="text-sm text-gray-600">
@@ -72,7 +120,13 @@ function MatchInfo({ matchInfo, score }) {
 
       {/* Feature highlights */}
       <div className="mt-3 pt-3 border-t border-blue-200">
-        <div className="flex items-center space-x-4 text-xs text-gray-500">
+        <div className="flex items-center space-x-4 text-xs text-gray-500 flex-wrap gap-2">
+          {imageMatch !== null && (
+            <div className="flex items-center space-x-1">
+              <Image className="h-3 w-3" />
+              <span>Image Comparison</span>
+            </div>
+          )}
           <div className="flex items-center space-x-1">
             <Palette className="h-3 w-3" />
             <span>Color Analysis</span>

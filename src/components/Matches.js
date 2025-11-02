@@ -31,7 +31,18 @@ function Matches() {
     try {
       setLoading(true);
       const response = await getMatches(userEmail, itemId);
-      setMatches(response.data || []);
+      const matchesData = response.data || [];
+      console.log("Loaded matches:", matchesData);
+      matchesData.forEach((match, index) => {
+        console.log(`Match ${index}:`, {
+          id: match.id,
+          lostItemImageUrl: match.lostItem?.imageUrl,
+          foundItemImageUrl: match.foundItem?.imageUrl,
+          imageMatchScore: match.imageMatchScore,
+          matchInfo: match.matchInfo
+        });
+      });
+      setMatches(matchesData);
     } catch (error) {
       console.error("Error loading matches:", error);
       setError("Failed to load matches. Please try again.");
@@ -170,6 +181,52 @@ function Matches() {
                     )}
                   </div>
 
+                  {/* Image Comparison Section */}
+                  {(match.lostItem?.imageUrl || match.foundItem?.imageUrl) && (
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                      <h4 className="font-medium text-gray-900 mb-3">Image Comparison</h4>
+                      {match.lostItem?.imageUrl && match.foundItem?.imageUrl ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2">Your Lost Item</p>
+                            <img
+                              src={match.lostItem.imageUrl}
+                              alt="Lost item"
+                              className="w-full h-48 object-cover rounded-lg border-2 border-blue-200"
+                              onError={(e) => {
+                                console.error('Failed to load lost item image:', match.lostItem.imageUrl);
+                                e.target.style.display = 'none';
+                              }}
+                              onLoad={() => {
+                                console.log('Successfully loaded lost item image:', match.lostItem.imageUrl);
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2">Found Item</p>
+                            <img
+                              src={match.foundItem.imageUrl}
+                              alt="Found item"
+                              className="w-full h-48 object-cover rounded-lg border-2 border-green-200"
+                              onError={(e) => {
+                                console.error('Failed to load found item image:', match.foundItem.imageUrl);
+                                e.target.style.display = 'none';
+                              }}
+                              onLoad={() => {
+                                console.log('Successfully loaded found item image:', match.foundItem.imageUrl);
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-600">
+                          {!match.lostItem?.imageUrl && <p>Lost item image not available</p>}
+                          {!match.foundItem?.imageUrl && <p>Found item image not available</p>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Match Details */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
@@ -178,6 +235,13 @@ function Matches() {
                         <p><strong>Category:</strong> {match.lostItem?.category}</p>
                         <p><strong>Description:</strong> {match.lostItem?.description}</p>
                         <p><strong>Lost on:</strong> {formatDate(match.lostItem?.createdAt)}</p>
+                        {match.lostItem?.imageUrl && (
+                          <img
+                            src={match.lostItem.imageUrl}
+                            alt="Lost item"
+                            className="mt-2 w-32 h-32 object-cover rounded-lg"
+                          />
+                        )}
                       </div>
                     </div>
                     
@@ -188,6 +252,13 @@ function Matches() {
                         <p><strong>Found by:</strong> {match.foundItem?.userEmail}</p>
                         <p><strong>Contact:</strong> {match.foundItem?.contactInfo}</p>
                         <p><strong>Status:</strong> {match.foundItem?.foundOption}</p>
+                        {match.foundItem?.imageUrl && !match.lostItem?.imageUrl && (
+                          <img
+                            src={match.foundItem.imageUrl}
+                            alt="Found item"
+                            className="mt-2 w-32 h-32 object-cover rounded-lg"
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -213,7 +284,13 @@ function Matches() {
 
                   {/* AI Match Analysis */}
                   <div className="mb-6">
-                    <MatchInfo matchInfo={match.matchInfo} score={match.score} />
+                    <MatchInfo 
+                      matchInfo={match.matchInfo} 
+                      score={match.score} 
+                      imageMatchScore={match.imageMatchScore !== null && match.imageMatchScore !== undefined 
+                        ? (typeof match.imageMatchScore === 'number' ? match.imageMatchScore : null)
+                        : null}
+                    />
                   </div>
 
                   {/* Action Buttons */}

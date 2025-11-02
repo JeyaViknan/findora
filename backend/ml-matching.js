@@ -2,6 +2,7 @@ const natural = require('natural');
 const nlp = require('compromise');
 const Sentiment = require('sentiment');
 const stringSimilarity = require('string-similarity');
+const ImageMatcher = require('./image-matcher');
 
 // Initialize sentiment analyzer
 const sentiment = new Sentiment();
@@ -13,6 +14,8 @@ class MLMatchingService {
     this.stemmer = natural.PorterStemmer;
     this.tokenizer = new natural.WordTokenizer();
     this.tfidf = new natural.TfIdf();
+    // Initialize image matcher
+    this.imageMatcher = new ImageMatcher();
   }
 
   // Extract key features from text using NLP
@@ -125,79 +128,121 @@ class MLMatchingService {
     );
   }
 
-  // Calculate advanced similarity between two items
-  calculateAdvancedSimilarity(lostItem, foundItem) {
+  // Calculate advanced similarity between two items (now async to support image comparison)
+  async calculateAdvancedSimilarity(lostItem, foundItem) {
     const lostFeatures = this.extractFeatures(lostItem.description);
     const foundFeatures = this.extractFeatures(foundItem.description);
     
     let totalScore = 0;
     let weightSum = 0;
+    let imageSimilarity = 0;
+    let hasImages = false;
 
-    // 1. Text similarity using multiple algorithms (30% weight)
+    // Image similarity (25% weight) - only if both items have images
+    // Use original imageUrl from items (relative path like /uploads/filename.jpg)
+    // The imageMatcher will convert it to file system path
+    const lostImageUrl = lostItem.imageUrl;
+    const foundImageUrl = foundItem.imageUrl;
+    
+    if (lostImageUrl && foundImageUrl) {
+      try {
+        // Extract relative path if it's a full URL (for local server, images are stored with relative paths)
+        const lostPath = lostImageUrl.includes('localhost') 
+          ? lostImageUrl.replace(/^http:\/\/localhost:\d+/, '') 
+          : lostImageUrl;
+        const foundPath = foundImageUrl.includes('localhost') 
+          ? foundImageUrl.replace(/^http:\/\/localhost:\d+/, '') 
+          : foundImageUrl;
+          
+        console.log(`Comparing images: ${lostPath} vs ${foundPath}`);
+        imageSimilarity = await this.imageMatcher.compareItemImages(lostPath, foundPath);
+        console.log(`Image similarity result: ${imageSimilarity}`);
+        hasImages = true;
+        totalScore += imageSimilarity * 0.25;
+        weightSum += 0.25;
+      } catch (error) {
+        console.error('Error comparing images:', error);
+        console.error('Error stack:', error.stack);
+        // If image comparison fails, continue without it
+      }
+    } else {
+      console.log(`Skipping image comparison - lostItem.imageUrl: ${lostImageUrl}, foundItem.imageUrl: ${foundImageUrl}`);
+    }
+
+    // 1. Text similarity using multiple algorithms (adjusted weight: 25% if images, 35% if not)
+    const textWeight = hasImages ? 0.25 : 0.35;
     const textSimilarity = this.calculateTextSimilarity(
       lostItem.description, 
       foundItem.description
     );
-    totalScore += textSimilarity * 0.3;
-    weightSum += 0.3;
+    totalScore += textSimilarity * textWeight;
+    weightSum += textWeight;
 
-    // 2. Key phrase matching (20% weight)
+    // 2. Key phrase matching (adjusted weight: 15% if images, 20% if not)
+    const phraseWeight = hasImages ? 0.15 : 0.20;
     const phraseScore = this.calculatePhraseSimilarity(
       lostFeatures.keyPhrases, 
       foundFeatures.keyPhrases
     );
-    totalScore += phraseScore * 0.2;
-    weightSum += 0.2;
+    totalScore += phraseScore * phraseWeight;
+    weightSum += phraseWeight;
 
-    // 3. Color matching (15% weight)
+    // 3. Color matching (10% weight)
     const colorScore = this.calculateColorSimilarity(
       lostFeatures.colors, 
       foundFeatures.colors
     );
-    totalScore += colorScore * 0.15;
-    weightSum += 0.15;
+    totalScore += colorScore * 0.10;
+    weightSum += 0.10;
 
-    // 4. Brand matching (10% weight)
+    // 4. Brand matching (8% weight)
     const brandScore = this.calculateBrandSimilarity(
       lostFeatures.brands, 
       foundFeatures.brands
     );
-    totalScore += brandScore * 0.1;
-    weightSum += 0.1;
+    totalScore += brandScore * 0.08;
+    weightSum += 0.08;
 
-    // 5. Material matching (10% weight)
+    // 5. Material matching (8% weight)
     const materialScore = this.calculateMaterialSimilarity(
       lostFeatures.materials, 
       foundFeatures.materials
     );
-    totalScore += materialScore * 0.1;
-    weightSum += 0.1;
+    totalScore += materialScore * 0.08;
+    weightSum += 0.08;
 
-    // 6. Condition matching (5% weight)
+    // 6. Condition matching (4% weight)
     const conditionScore = this.calculateConditionSimilarity(
       lostFeatures.conditions, 
       foundFeatures.conditions
     );
-    totalScore += conditionScore * 0.05;
-    weightSum += 0.05;
+    totalScore += conditionScore * 0.04;
+    weightSum += 0.04;
 
-    // 7. Entity matching (5% weight)
+    // 7. Entity matching (4% weight)
     const entityScore = this.calculateEntitySimilarity(
       lostFeatures.entities, 
       foundFeatures.entities
     );
-    totalScore += entityScore * 0.05;
-    weightSum += 0.05;
+    totalScore += entityScore * 0.04;
+    weightSum += 0.04;
 
-    // 8. Sentiment similarity (5% weight)
+    // 8. Sentiment similarity (1% weight if images, 6% if not)
+    const sentimentWeight = hasImages ? 0.01 : 0.06;
     const sentimentScore = this.calculateSentimentSimilarity(
       lostFeatures.sentiment, 
       foundFeatures.sentiment
     );
-    totalScore += sentimentScore * 0.05;
-    weightSum += 0.05;
+    totalScore += sentimentScore * sentimentWeight;
+    weightSum += sentimentWeight;
 
-    return totalScore / weightSum;
+    const finalScore = weightSum > 0 ? totalScore / weightSum : 0;
+
+    return {
+      score: finalScore,
+      imageSimilarity: hasImages ? imageSimilarity : null,
+      hasImages: hasImages
+    };
   }
 
   // Calculate text similarity using multiple algorithms
@@ -326,11 +371,23 @@ class MLMatchingService {
   }
 
   // Generate match explanation
-  generateMatchExplanation(lostItem, foundItem, score) {
+  generateMatchExplanation(lostItem, foundItem, score, imageSimilarity = null) {
     const lostFeatures = this.extractFeatures(lostItem.description);
     const foundFeatures = this.extractFeatures(foundItem.description);
     
     const explanations = [];
+    
+    // Image match (add this first if available)
+    if (imageSimilarity !== null && imageSimilarity !== undefined) {
+      const imageMatchPercent = Math.round(imageSimilarity * 100);
+      if (imageMatchPercent >= 70) {
+        explanations.push(`Images show ${imageMatchPercent}% similarity - strong visual match`);
+      } else if (imageMatchPercent >= 50) {
+        explanations.push(`Images show ${imageMatchPercent}% similarity - moderate visual match`);
+      } else if (imageMatchPercent >= 30) {
+        explanations.push(`Images show ${imageMatchPercent}% similarity - some visual resemblance`);
+      }
+    }
     
     // Color match
     const commonColors = lostFeatures.colors.filter(color => 
@@ -405,7 +462,8 @@ class MLMatchingService {
     return {
       explanations,
       confidence: this.getConfidenceLevel(score),
-      score: Math.round(score * 100)
+      score: Math.round(score * 100),
+      imageSimilarity: imageSimilarity !== null ? Math.round(imageSimilarity * 100) : null
     };
   }
 

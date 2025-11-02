@@ -101,7 +101,7 @@ const calculateMatchScore = (lostItem, foundItem) => {
   return Math.min(score, 1); // Cap at 1.0
 };
 
-const findMatches = (newItem) => {
+const findMatches = async (newItem) => {
   const matches = [];
   const threshold = 0.25; // Lower threshold for ML matching
   
@@ -114,23 +114,33 @@ const findMatches = (newItem) => {
     );
     
     for (const foundItem of foundItems) {
-      // Combine classic and ML scores; keep the stronger one to avoid regressions
-      const classicScore = calculateMatchScore(newItem, foundItem);
-      const mlScore = mlMatching.calculateAdvancedSimilarity(newItem, foundItem);
-      const score = Math.max(classicScore, mlScore);
-      if (score >= threshold) {
-        const matchInfo = mlMatching.generateMatchExplanation(newItem, foundItem, score);
-        matches.push({
-          id: uuidv4(),
-          lostItemId: newItem.id,
-          foundItemId: foundItem.id,
-          lostUserEmail: newItem.userEmail,
-          foundUserEmail: foundItem.userEmail,
-          score: score,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          matchInfo: matchInfo
-        });
+      try {
+        // Combine classic and ML scores; keep the stronger one to avoid regressions
+        const classicScore = calculateMatchScore(newItem, foundItem);
+        const mlResult = await mlMatching.calculateAdvancedSimilarity(newItem, foundItem);
+        const mlScore = typeof mlResult === 'object' ? mlResult.score : mlResult;
+        const score = Math.max(classicScore, mlScore);
+        
+        if (score >= threshold) {
+          const imageSimilarity = typeof mlResult === 'object' ? mlResult.imageSimilarity : null;
+          console.log(`Image similarity calculated: ${imageSimilarity} for lostItem ${newItem.id} and foundItem ${foundItem.id}`);
+          const matchInfo = mlMatching.generateMatchExplanation(newItem, foundItem, score, imageSimilarity);
+          matches.push({
+            id: uuidv4(),
+            lostItemId: newItem.id,
+            foundItemId: foundItem.id,
+            lostUserEmail: newItem.userEmail,
+            foundUserEmail: foundItem.userEmail,
+            score: score,
+            imageMatchScore: imageSimilarity,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            matchInfo: matchInfo
+          });
+        }
+      } catch (error) {
+        console.error('Error matching items:', error);
+        // Continue with next item if matching fails
       }
     }
   } else if (newItem.type === 'found') {
@@ -142,22 +152,32 @@ const findMatches = (newItem) => {
     );
     
     for (const lostItem of lostItems) {
-      const classicScore = calculateMatchScore(lostItem, newItem);
-      const mlScore = mlMatching.calculateAdvancedSimilarity(lostItem, newItem);
-      const score = Math.max(classicScore, mlScore);
-      if (score >= threshold) {
-        const matchInfo = mlMatching.generateMatchExplanation(lostItem, newItem, score);
-        matches.push({
-          id: uuidv4(),
-          lostItemId: lostItem.id,
-          foundItemId: newItem.id,
-          lostUserEmail: lostItem.userEmail,
-          foundUserEmail: newItem.userEmail,
-          score: score,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          matchInfo: matchInfo
-        });
+      try {
+        const classicScore = calculateMatchScore(lostItem, newItem);
+        const mlResult = await mlMatching.calculateAdvancedSimilarity(lostItem, newItem);
+        const mlScore = typeof mlResult === 'object' ? mlResult.score : mlResult;
+        const score = Math.max(classicScore, mlScore);
+        
+        if (score >= threshold) {
+          const imageSimilarity = typeof mlResult === 'object' ? mlResult.imageSimilarity : null;
+          console.log(`Image similarity calculated: ${imageSimilarity} for lostItem ${lostItem.id} and foundItem ${newItem.id}`);
+          const matchInfo = mlMatching.generateMatchExplanation(lostItem, newItem, score, imageSimilarity);
+          matches.push({
+            id: uuidv4(),
+            lostItemId: lostItem.id,
+            foundItemId: newItem.id,
+            lostUserEmail: lostItem.userEmail,
+            foundUserEmail: newItem.userEmail,
+            score: score,
+            imageMatchScore: imageSimilarity,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            matchInfo: matchInfo
+          });
+        }
+      } catch (error) {
+        console.error('Error matching items:', error);
+        // Continue with next item if matching fails
       }
     }
   }
@@ -272,7 +292,7 @@ app.post('/items/lost', upload.single('image'), (req, res) => {
 
     // Find matches for this lost item (non-fatal)
     try {
-      const newMatches = findMatches(item);
+      const newMatches = await findMatches(item);
       matches.push(...newMatches);
       return createResponse(res, 201, {
         message: 'Lost item reported successfully',
@@ -346,7 +366,7 @@ app.post('/items/found', upload.single('image'), (req, res) => {
 
     // Find matches for this found item (do not fail the request if matching errors)
     try {
-      const newMatches = findMatches(item);
+      const newMatches = await findMatches(item);
       matches.push(...newMatches);
       return createResponse(res, 201, {
         message: 'Found item reported successfully',
@@ -425,6 +445,23 @@ app.get('/items/found/:userEmail', (req, res) => {
   }
 });
 
+// Helper function to convert relative image URLs to full URLs
+const getFullImageUrl = (imageUrl) => {
+  if (!imageUrl) {
+    console.log('getFullImageUrl: imageUrl is null/undefined');
+    return null;
+  }
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    console.log('getFullImageUrl: Already full URL:', imageUrl);
+    return imageUrl;
+  }
+  // For local development, prepend the server URL
+  const baseUrl = `http://localhost:${PORT}`;
+  const fullUrl = imageUrl.startsWith('/') ? `${baseUrl}${imageUrl}` : `${baseUrl}/${imageUrl}`;
+  console.log('getFullImageUrl: Converted', imageUrl, 'to', fullUrl);
+  return fullUrl;
+};
+
 // Match routes
 app.get('/matches/:userEmail', (req, res) => {
   try {
@@ -439,14 +476,14 @@ app.get('/matches/:userEmail', (req, res) => {
       const lostItem = items.find(item => item.id === match.lostItemId);
       const foundItem = items.find(item => item.id === match.foundItemId);
       
-      return {
+      const enhancedMatch = {
         ...match,
         lostItem: lostItem ? {
           id: lostItem.id,
           description: lostItem.description,
           category: lostItem.category,
           location: lostItem.location,
-          imageUrl: lostItem.imageUrl,
+          imageUrl: getFullImageUrl(lostItem.imageUrl),
           createdAt: lostItem.createdAt
         } : null,
         foundItem: foundItem ? {
@@ -454,10 +491,21 @@ app.get('/matches/:userEmail', (req, res) => {
           description: foundItem.description,
           category: foundItem.category,
           location: foundItem.location,
-          imageUrl: foundItem.imageUrl,
+          imageUrl: getFullImageUrl(foundItem.imageUrl),
           createdAt: foundItem.createdAt
         } : null
       };
+      
+      // Log match data for debugging
+      console.log('Enhanced match:', {
+        matchId: enhancedMatch.id,
+        lostItemImage: enhancedMatch.lostItem?.imageUrl,
+        foundItemImage: enhancedMatch.foundItem?.imageUrl,
+        imageMatchScore: enhancedMatch.imageMatchScore,
+        matchInfoImageSimilarity: enhancedMatch.matchInfo?.imageSimilarity
+      });
+      
+      return enhancedMatch;
     });
     
     // If an itemId is provided, filter matches to only those related to that item
@@ -548,13 +596,22 @@ app.post('/upload', upload.single('image'), (req, res) => {
   }
 });
 
-// Serve uploaded files
-app.use('/uploads', express.static(uploadsDir));
+// Serve uploaded files - make sure this is after other routes
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, path) => {
+    // Allow CORS for images
+    res.set('Access-Control-Allow-Origin', '*');
+  }
+}));
 
-// Manual matching trigger (for testing)
-app.post('/matches/trigger', (req, res) => {
+// Log when static files are being served
+console.log(`Serving static files from: ${uploadsDir}`);
+console.log(`Uploads available at: http://localhost:${PORT}/uploads/`);
+
+// Manual matching trigger (for testing and re-running matches with images)
+app.post('/matches/trigger', async (req, res) => {
   try {
-    const { userEmail } = req.body;
+    const { userEmail, recalculate = false } = req.body;
     
     if (!userEmail) {
       return createResponse(res, 400, {
@@ -565,9 +622,17 @@ app.post('/matches/trigger', (req, res) => {
     // Find all items for this user
     const userItems = items.filter(item => item.userEmail === userEmail);
     let totalMatches = 0;
+    let recalculatedCount = 0;
+    
+    // If recalculate is true, remove existing matches and re-run
+    if (recalculate) {
+      matches = matches.filter(m => 
+        m.lostUserEmail !== userEmail && m.foundUserEmail !== userEmail
+      );
+    }
     
     for (const item of userItems) {
-      const newMatches = findMatches(item);
+      const newMatches = await findMatches(item);
       // Filter out duplicates
       const uniqueMatches = newMatches.filter(newMatch => 
         !matches.some(existingMatch => 
@@ -577,11 +642,13 @@ app.post('/matches/trigger', (req, res) => {
       );
       matches.push(...uniqueMatches);
       totalMatches += uniqueMatches.length;
+      recalculatedCount += newMatches.length;
     }
     
     return createResponse(res, 200, {
       message: 'Matching completed',
       newMatchesFound: totalMatches,
+      recalculatedMatches: recalculatedCount,
       totalMatches: matches.length
     });
   } catch (error) {
