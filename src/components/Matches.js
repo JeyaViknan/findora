@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, X, MapPin, Clock, User, Phone, Mail } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { ArrowLeft, Check, X, MapPin } from "lucide-react";
 import { getMatches, verifyMatch } from "../api";
+import MatchInfo from "./MatchInfo";
 
 function Matches() {
   const [matches, setMatches] = useState([]);
@@ -9,6 +10,12 @@ function Matches() {
   const [error, setError] = useState("");
   const [verifying, setVerifying] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const getItemIdFromQuery = React.useCallback(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('itemId');
+  }, [location.search]);
 
   useEffect(() => {
     const userEmail = localStorage.getItem("userEmail");
@@ -16,13 +23,14 @@ function Matches() {
       navigate("/");
       return;
     }
-    loadMatches(userEmail);
-  }, [navigate]);
+    const itemId = getItemIdFromQuery();
+    loadMatches(userEmail, itemId);
+  }, [navigate, location.search]);
 
-  const loadMatches = async (userEmail) => {
+  const loadMatches = async (userEmail, itemId) => {
     try {
       setLoading(true);
-      const response = await getMatches(userEmail);
+      const response = await getMatches(userEmail, itemId);
       setMatches(response.data || []);
     } catch (error) {
       console.error("Error loading matches:", error);
@@ -203,23 +211,9 @@ function Matches() {
                     </div>
                   )}
 
-                  {/* Match Score */}
-                  <div className="mb-6 p-4 bg-yellow-50 rounded-lg">
-                    <h4 className="font-medium text-gray-900 mb-2">Match Confidence</h4>
-                    <div className="flex items-center space-x-2">
-                      <div className="flex-1 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-yellow-500 h-2 rounded-full" 
-                          style={{ width: `${match.confidenceScore || 0}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-sm font-medium text-gray-700">
-                        {match.confidenceScore || 0}%
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Based on description similarity and location proximity
-                    </p>
+                  {/* AI Match Analysis */}
+                  <div className="mb-6">
+                    <MatchInfo matchInfo={match.matchInfo} score={match.score} />
                   </div>
 
                   {/* Action Buttons */}

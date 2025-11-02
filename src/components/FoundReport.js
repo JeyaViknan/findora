@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import { useDropzone } from "react-dropzone";
-import { ArrowLeft, MapPin, Upload, X, Camera, Home, Store, User } from "lucide-react";
+import { ArrowLeft, Upload, X, Camera, Home, Store, MapPin } from "lucide-react";
 import { reportFoundItem } from "../api";
+import LocationPicker from "./LocationPicker";
 
 function FoundReport() {
   const [formData, setFormData] = useState({
@@ -15,7 +15,6 @@ function FoundReport() {
     foundOption: "",
     vendorInfo: "",
   });
-  const [markers, setMarkers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -60,22 +59,11 @@ function FoundReport() {
     }
   ];
 
-  const MapClickHandler = () => {
-    useMapEvents({
-      click: (e) => {
-        const newMarker = {
-          lat: e.latlng.lat,
-          lng: e.latlng.lng,
-          id: Date.now()
-        };
-        setMarkers([newMarker]);
-        setFormData(prev => ({
-          ...prev,
-          location: newMarker
-        }));
-      }
-    });
-    return null;
+  const handleLocationSelect = (location) => {
+    setFormData(prev => ({
+      ...prev,
+      location: location
+    }));
   };
 
   const onDrop = (acceptedFiles) => {
@@ -266,39 +254,14 @@ function FoundReport() {
 
           {/* Location Selection */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Found Location</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Click on the map to mark where you found the item.
-            </p>
-            
-            <div className="h-96 w-full rounded-lg overflow-hidden border">
-              <MapContainer
-                center={[40.7128, -74.0060]} // Default to NYC
-                zoom={13}
-                style={{ height: "100%", width: "100%" }}
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                <MapClickHandler />
-                {markers.map(marker => (
-                  <Marker
-                    key={marker.id}
-                    position={[marker.lat, marker.lng]}
-                  />
-                ))}
-              </MapContainer>
-            </div>
-            
-            {markers.length > 0 && (
-              <div className="mt-4 p-3 bg-green-50 rounded-md">
-                <p className="text-sm text-green-800">
-                  <MapPin className="inline h-4 w-4 mr-1" />
-                  Found location: {markers[0].lat.toFixed(6)}, {markers[0].lng.toFixed(6)}
-                </p>
-              </div>
-            )}
+            <LocationPicker
+              center={[40.7128, -74.0060]}
+              zoom={13}
+              onLocationSelect={handleLocationSelect}
+              selectedLocation={formData.location}
+              placeholder="Search for where you found the item or click on the map"
+              title="Found Item Location"
+            />
           </div>
 
           {/* Image Upload */}

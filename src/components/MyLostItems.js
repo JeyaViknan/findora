@@ -179,7 +179,7 @@ function MyLostItems() {
                         We found {item.matches.length} potential match{item.matches.length !== 1 ? 'es' : ''} for this item.
                       </p>
                       <button
-                        onClick={() => navigate("/matches")}
+                        onClick={() => navigate(`/matches?itemId=${encodeURIComponent(item.id)}`)}
                         className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
                       >
                         View Matches →
@@ -190,7 +190,7 @@ function MyLostItems() {
                   {/* Action Buttons */}
                   <div className="flex space-x-4">
                     <button
-                      onClick={() => navigate("/matches")}
+                      onClick={() => navigate(`/matches?itemId=${encodeURIComponent(item.id)}`)}
                       className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 flex items-center justify-center space-x-2"
                     >
                       <Eye className="h-4 w-4" />

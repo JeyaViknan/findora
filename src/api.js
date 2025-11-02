@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = "https://jx62z3hhfh.execute-api.ap-south-1.amazonaws.com/dev";
+const API_BASE_URL = "http://localhost:3001";
 
 const API = axios.create({
   baseURL: API_BASE_URL,
@@ -49,7 +49,10 @@ export const reportFoundItem = (data) => {
 };
 
 // Match endpoints
-export const getMatches = (userEmail) => API.get(`/matches/${userEmail}`);
+export const getMatches = (userEmail, itemId) => {
+  const qs = itemId ? `?itemId=${encodeURIComponent(itemId)}` : '';
+  return API.get(`/matches/${userEmail}${qs}`);
+};
 export const verifyMatch = (matchId, isVerified) => API.post(`/matches/${matchId}/verify`, { isVerified });
 
 // User items endpoints

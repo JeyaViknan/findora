@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import { useDropzone } from "react-dropzone";
-import { ArrowLeft, MapPin, Upload, X, Camera } from "lucide-react";
+import { ArrowLeft, Upload, X, Camera } from "lucide-react";
 import { reportLostItem } from "../api";
+import LocationPicker from "./LocationPicker";
 
 function LostReport() {
   const [formData, setFormData] = useState({
@@ -13,7 +13,6 @@ function LostReport() {
     location: null,
     image: null,
   });
-  const [markers, setMarkers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -37,22 +36,11 @@ function LostReport() {
     "Other"
   ];
 
-  const MapClickHandler = () => {
-    useMapEvents({
-      click: (e) => {
-        const newMarker = {
-          lat: e.latlng.lat,
-          lng: e.latlng.lng,
-          id: Date.now()
-        };
-        setMarkers([newMarker]);
-        setFormData(prev => ({
-          ...prev,
-          location: newMarker
-        }));
-      }
-    });
-    return null;
+  const handleLocationSelect = (location) => {
+    setFormData(prev => ({
+      ...prev,
+      location: location
+    }));
   };
 
   const onDrop = (acceptedFiles) => {
@@ -181,39 +169,14 @@ function LostReport() {
 
           {/* Location Selection */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Location</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Click on the map to mark where you lost the item. You can add multiple locations if you're unsure.
-            </p>
-            
-            <div className="h-96 w-full rounded-lg overflow-hidden border">
-              <MapContainer
-                center={[40.7128, -74.0060]} // Default to NYC
-                zoom={13}
-                style={{ height: "100%", width: "100%" }}
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                <MapClickHandler />
-                {markers.map(marker => (
-                  <Marker
-                    key={marker.id}
-                    position={[marker.lat, marker.lng]}
-                  />
-                ))}
-              </MapContainer>
-            </div>
-            
-            {markers.length > 0 && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-md">
-                <p className="text-sm text-blue-800">
-                  <MapPin className="inline h-4 w-4 mr-1" />
-                  Location selected: {markers[0].lat.toFixed(6)}, {markers[0].lng.toFixed(6)}
-                </p>
-              </div>
-            )}
+            <LocationPicker
+              center={[40.7128, -74.0060]}
+              zoom={13}
+              onLocationSelect={handleLocationSelect}
+              selectedLocation={formData.location}
+              placeholder="Search for where you lost the item or click on the map"
+              title="Lost Item Location"
+            />
           </div>
 
           {/* Image Upload */}
